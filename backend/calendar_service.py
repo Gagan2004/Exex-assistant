@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from database import OAuthTokenDB
+from database import OAuthTokenDB, ActionItemDB
 
 # Google APIs
 from google.oauth2.credentials import Credentials
@@ -392,9 +392,50 @@ class CalendarService:
     @staticmethod
     def list_upcoming_meetings(db: Session, executive_id: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """
-        Lists upcoming meetings for the executive from their Google Calendar.
-        Falls back to a mock sandbox list if not synced.
+        Lists upcoming meetings for the executive, merging Google Calendar events
+        and locally approved database events.
         """
+        # Fetch approved calendar actions from database
+        db_meetings = []
+        try:
+            db_actions = db.query(ActionItemDB).filter(
+                ActionItemDB.executive_id == executive_id,
+                ActionItemDB.type == "calendar",
+                ActionItemDB.status == "approved"
+            ).all()
+            
+            for act in db_actions:
+                # Find Google Meet link if present in description
+                meet_link = "https://meet.google.com/abc-defg-hij" # default fallback
+                if "Google Meet: " in act.description:
+                    try:
+                        meet_link = act.description.split("Google Meet: ")[1].split(")")[0].strip()
+                    except Exception:
+                        pass
+                
+                # Parse start/end times
+                start_iso = (datetime.utcnow() + timedelta(days=1)).isoformat()
+                end_iso = (datetime.utcnow() + timedelta(days=1, hours=1)).isoformat()
+                
+                parsed_dt = parse_datetime_flexible(act.time_proposed)
+                if parsed_dt:
+                    start_iso = parsed_dt.isoformat()
+                    end_iso = (parsed_dt + timedelta(minutes=45)).isoformat()
+                    
+                db_meetings.append({
+                    "id": act.id,
+                    "title": act.title,
+                    "description": act.description,
+                    "start_time": start_iso,
+                    "end_time": end_iso,
+                    "meet_link": meet_link,
+                    "attendees": [act.recipient] if act.recipient else [],
+                    "status": "confirmed"
+                })
+        except Exception as e:
+            logger.error(f"Error querying database for upcoming meetings: {e}")
+
+        # Check Google Calendar if credentials exist
         creds = CalendarService.get_google_creds(db, executive_id)
         if creds:
             try:
@@ -411,11 +452,11 @@ class CalendarService:
                 ).execute()
                 
                 events = events_result.get('items', [])
-                meetings = []
+                google_meetings = []
                 for event in events:
                     start_time = event.get('start', {}).get('dateTime') or event.get('start', {}).get('date')
                     end_time = event.get('end', {}).get('dateTime') or event.get('end', {}).get('date')
-                    meetings.append({
+                    google_meetings.append({
                         "id": event.get('id'),
                         "title": event.get('summary', 'Untitled Meeting'),
                         "description": event.get('description', ''),
@@ -425,21 +466,33 @@ class CalendarService:
                         "attendees": [att.get('email') for att in event.get('attendees', []) if att.get('email')],
                         "status": event.get('status')
                     })
-                return meetings
+                
+                # Merge database meetings that aren't already represented in Google Calendar list
+                merged = list(google_meetings)
+                for db_m in db_meetings:
+                    exists = False
+                    for g_m in google_meetings:
+                        g_start = g_m["start_time"][:16] if g_m["start_time"] else ""
+                        db_start = db_m["start_time"][:16] if db_m["start_time"] else ""
+                        if g_start == db_start and g_m["title"].lower() == db_m["title"].lower():
+                            exists = True
+                            break
+                    if not exists:
+                        merged.append(db_m)
+                        
+                # Sort and slice
+                try:
+                    merged.sort(key=lambda m: m["start_time"])
+                except Exception:
+                    pass
+                return merged[:max_results]
+                
             except Exception as e:
                 logger.error(f"Error fetching upcoming Google Calendar meetings: {e}")
-                
-        # Mock fallback
-        # Let's return some mock upcoming meetings matching the active executive!
-        from database import ExecutiveDB
-        exec_db = db.query(ExecutiveDB).filter_by(id=executive_id).first()
-        exec_name = exec_db.name if exec_db else "Sarah Jenkins"
-        
-        # Let's dynamically generate dates relative to today
+
+        # If not synced or error occurred, combine database meetings with default static mocks
         today = datetime.now()
-        
-        # Some mock meetings
-        return [
+        static_mocks = [
             {
                 "id": "mock_meet_1",
                 "title": "Weekly Strategy & Q3 Planning",
@@ -471,3 +524,11 @@ class CalendarService:
                 "status": "confirmed"
             }
         ]
+        
+        all_meetings = db_meetings + static_mocks
+        try:
+            all_meetings.sort(key=lambda m: m["start_time"])
+        except Exception:
+            pass
+            
+        return all_meetings[:max_results]

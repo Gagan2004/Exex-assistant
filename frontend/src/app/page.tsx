@@ -67,7 +67,7 @@ export default function Dashboard() {
   const [modalTitleInput, setModalTitleInput] = useState("");
   const [modalRecipientInput, setModalRecipientInput] = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
-  
+
   const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || (typeof window !== "undefined"
     ? (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? "http://127.0.0.1:8001"
@@ -240,7 +240,7 @@ export default function Dashboard() {
       }
       return true;
     }
-    
+
     if (res.status === 422) {
       const errorData = await res.json();
       if (errorData.status === "requires_input") {
@@ -448,8 +448,8 @@ export default function Dashboard() {
                     key={exec.id}
                     onClick={() => setSelectedExec(exec)}
                     className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-300 ${isSelected
-                        ? "bg-neutral-800 border-l-4 border-blue-500 text-white shadow-md shadow-black/40"
-                        : "bg-neutral-950/40 border-l-4 border-transparent hover:bg-neutral-800/40 text-neutral-400 hover:text-neutral-200"
+                      ? "bg-neutral-800 border-l-4 border-blue-500 text-white shadow-md shadow-black/40"
+                      : "bg-neutral-950/40 border-l-4 border-transparent hover:bg-neutral-800/40 text-neutral-400 hover:text-neutral-200"
                       } border border-neutral-850`}
                   >
                     <img
@@ -542,22 +542,20 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setActiveInputTab("voice")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
-                    activeInputTab === "voice"
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeInputTab === "voice"
                       ? "bg-neutral-800 text-white shadow shadow-black/40"
                       : "text-neutral-500 hover:text-neutral-300"
-                  }`}
+                    }`}
                 >
                   <Mic className="h-3.5 w-3.5" /> Voice Memo
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveInputTab("text")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
-                    activeInputTab === "text"
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeInputTab === "text"
                       ? "bg-neutral-800 text-white shadow shadow-black/40"
                       : "text-neutral-500 hover:text-neutral-300"
-                  }`}
+                    }`}
                 >
                   <Mail className="h-3.5 w-3.5" /> Typed Directive
                 </button>
@@ -576,11 +574,10 @@ export default function Dashboard() {
                   <button
                     type="button"
                     onClick={handleMockRecord}
-                    className={`absolute right-3 bottom-3 p-3 rounded-full transition-all duration-300 cursor-pointer ${
-                      isRecording
+                    className={`absolute right-3 bottom-3 p-3 rounded-full transition-all duration-300 cursor-pointer ${isRecording
                         ? "bg-red-500 animate-pulse text-white shadow-lg shadow-red-500/20"
                         : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-                    }`}
+                      }`}
                     title="Mock Voice Record"
                   >
                     {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
@@ -658,10 +655,10 @@ export default function Dashboard() {
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${action.type === "calendar"
-                            ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                            : action.type === "email"
-                              ? "bg-violet-500/10 text-violet-400 border border-violet-500/20"
-                              : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                          : action.type === "email"
+                            ? "bg-violet-500/10 text-violet-400 border border-violet-500/20"
+                            : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                           }`}>
                           {action.type} Action
                         </span>
@@ -738,7 +735,7 @@ export default function Dashboard() {
                       hour: '2-digit',
                       minute: '2-digit'
                     });
-                  } catch (e) {}
+                  } catch (e) { }
 
                   return (
                     <div
@@ -806,7 +803,7 @@ export default function Dashboard() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4">
-            
+
             {/* Header */}
             <div>
               <div className="flex items-center gap-2 text-blue-400 font-bold text-lg mb-1">
@@ -820,7 +817,7 @@ export default function Dashboard() {
 
             {/* Form */}
             <form onSubmit={submitModalForm} className="flex flex-col gap-4">
-              
+
               {/* Event Title Field */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
@@ -834,11 +831,10 @@ export default function Dashboard() {
                   value={modalTitleInput}
                   onChange={(e) => setModalTitleInput(e.target.value)}
                   placeholder="e.g., Sync with Joseph"
-                  className={`w-full bg-neutral-950 border ${
-                    missingFields.includes("title") && !modalTitleInput.trim()
+                  className={`w-full bg-neutral-950 border ${missingFields.includes("title") && !modalTitleInput.trim()
                       ? "border-red-500/50 focus:ring-red-500"
                       : "border-neutral-800 focus:ring-blue-500"
-                  } rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:ring-1 transition-all`}
+                    } rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:ring-1 transition-all`}
                   required
                 />
               </div>
@@ -855,11 +851,10 @@ export default function Dashboard() {
                   type="datetime-local"
                   value={modalTimeInput}
                   onChange={(e) => setModalTimeInput(e.target.value)}
-                  className={`w-full bg-neutral-950 border ${
-                    missingFields.includes("time_proposed") && !modalTimeInput.trim()
+                  className={`w-full bg-neutral-950 border ${missingFields.includes("time_proposed") && !modalTimeInput.trim()
                       ? "border-red-500/50 focus:ring-red-500"
                       : "border-neutral-800 focus:ring-blue-500"
-                  } rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:ring-1 transition-all`}
+                    } rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:ring-1 transition-all`}
                   required
                 />
               </div>
