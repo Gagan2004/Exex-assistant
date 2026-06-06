@@ -162,6 +162,26 @@ export default function Dashboard() {
     }
   };
 
+  const disconnectCalendar = async (provider: "google" | "microsoft") => {
+    if (!selectedExec) return;
+    try {
+      const res = await fetch(`${backendUrl}/api/auth/disconnect?executive_id=${selectedExec.id}&provider=${provider}`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        showToast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} account disconnected successfully!`);
+        setGoogleConnected(false);
+        fetchMeetings(selectedExec.id);
+      } else {
+        throw new Error();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to disconnect account", "error");
+    }
+  };
+
+
   const fetchExecutives = async () => {
     try {
       const res = await fetch(`${backendUrl}/api/executives`);
@@ -512,9 +532,18 @@ export default function Dashboard() {
               <div className="flex justify-between items-center">
                 <span>Google Calendar Sync</span>
                 {googleConnected ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Synced
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Synced
+                    </span>
+                    <button
+                      onClick={() => disconnectCalendar("google")}
+                      className="text-[9px] bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-red-900/30 px-2 py-0.5 rounded transition-all cursor-pointer"
+                      title="Disconnect / Sign Out Google Account"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={() => syncCalendar("google")}

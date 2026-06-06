@@ -308,9 +308,21 @@ def get_auth_status(executive_id: str, db: Session = Depends(get_db)):
         "google_connected": has_google,
         "google_email": "Connected" if has_google else "Disconnected"
     }
+@app.post("/api/auth/disconnect")
+def disconnect_auth(executive_id: str, provider: str = "google", db: Session = Depends(get_db)):
+    """
+    Deletes the OAuth token for a specific executive and provider to disconnect sync.
+    """
+    token_entry = db.query(OAuthTokenDB).filter_by(executive_id=executive_id, provider=provider).first()
+    if token_entry:
+        db.delete(token_entry)
+        db.commit()
+        return {"status": "success", "message": f"{provider.capitalize()} integration disconnected."}
+    raise HTTPException(status_code=404, detail="Integration not found or already disconnected.")
 
 
 @app.get("/api/auth/{provider}/url")
+
 def get_auth_url(provider: str, executive_id: str, referer: Optional[str] = Header(None)):
     """
     Generates OAuth login URL for calendar integrations, passing the referer origin in state.
