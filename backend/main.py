@@ -21,14 +21,20 @@ init_db()
 
 app = FastAPI(title="Executive AI Assistant Backend")
 
-# Enable CORS for the frontend dev server
+# Enable CORS for the frontend dev server and production URLs
+allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+env_origins = os.environ.get("ALLOWED_ORIGINS")
+if env_origins:
+    allowed_origins.extend([o.strip() for o in env_origins.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Pydantic schemas for serialization
 class ExecutiveResponse(BaseModel):
