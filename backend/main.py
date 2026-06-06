@@ -311,24 +311,49 @@ def get_auth_status(executive_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/auth/{provider}/url")
-def get_auth_url(provider: str, executive_id: str):
+def get_auth_url(provider: str, executive_id: str, referer: Optional[str] = Header(None)):
     """
-    Generates OAuth login URL for calendar integrations.
+    Generates OAuth login URL for calendar integrations, passing the referer origin in state.
     """
     try:
-        url = CalendarService.get_auth_url(provider, executive_id)
+        # Determine frontend origin from referer header
+        frontend_url = "http://127.0.0.1:3000"
+        if referer:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+        # Combine executive_id and frontend_url in state
+        state = f"{executive_id}|{frontend_url}"
+        
+        url = CalendarService.get_auth_url(provider, state)
         return {"url": url}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/api/auth/{provider}/callback")
 def auth_callback(provider: str, code: str, state: str, db: Session = Depends(get_db)):
     """
-    OAuth Callback handler that receives code and logs tokens in DB.
+    OAuth Callback handler that exchanges credentials, logs tokens, and redirects back to frontend dashboard.
     """
     try:
-        result = CalendarService.handle_oauth_callback(db, provider, code, state)
-        return result
+        # State can be "executive_id" or "executive_id|frontend_url"
+        executive_id = state
+        frontend_url = None
+        if "|" in state:
+            parts = state.split("|", 1)
+            executive_id = parts[0]
+            frontend_url = parts[1]
+            
+        CalendarService.handle_oauth_callback(db, provider, code, executive_id)
+        
+        # Fallback redirect if referer origin wasn't present
+        if not frontend_url:
+            frontend_url = os.environ.get("FRONTEND_URL", "http://127.0.0.1:3000")
+            
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=frontend_url)
     except Exception as e:
         import traceback
         err_msg = f"Error in callback: {e}\n{traceback.format_exc()}"
