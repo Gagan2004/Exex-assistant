@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from database import OAuthTokenDB, ActionItemDB
+from database import OAuthTokenDB
 
 # Google APIs
 from google.oauth2.credentials import Credentials
@@ -109,6 +109,53 @@ def parse_datetime_flexible(date_str: str) -> Optional[datetime]:
             
     return None
 
+def get_google_flow(redirect_uri: str, state: Optional[str] = None) -> Optional[Flow]:
+    # 1. Try environment variables first
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    project_id = os.environ.get("GOOGLE_PROJECT_ID", "absolute-realm-498606-k5")
+    
+    if client_id and client_secret:
+        logger.info("Building Google OAuth flow from environment variables")
+        client_config = {
+            "web": {
+                "client_id": client_id,
+                "project_id": project_id,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_secret": client_secret,
+                "redirect_uris": [redirect_uri]
+            }
+        }
+        return Flow.from_client_config(
+            client_config,
+            scopes=[
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/gmail.send"
+            ],
+            redirect_uri=redirect_uri,
+            state=state,
+            autogenerate_code_verifier=False
+        )
+
+    # 2. Try file-based config
+    secrets_path = get_google_client_config_path()
+    if secrets_path:
+        logger.info(f"Building Google OAuth flow from secrets file: {secrets_path}")
+        return Flow.from_client_secrets_file(
+            secrets_path,
+            scopes=[
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/gmail.send"
+            ],
+            redirect_uri=redirect_uri,
+            state=state,
+            autogenerate_code_verifier=False
+        )
+        
+    return None
+
 class CalendarService:
     @staticmethod
     def get_auth_url(provider: str, executive_id: str) -> str:
@@ -116,31 +163,18 @@ class CalendarService:
         Generates the OAuth authentication URL for Google Workspace or Microsoft 365.
         """
         if provider == "google":
-            secrets_path = get_google_client_config_path()
-            if secrets_path:
-                logger.info(f"Using Google client secrets from: {secrets_path}")
-                # We need redirect URI. Using port 8001 since user runs backend on 8001
-                redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8001/api/auth/google/callback")
-                flow = Flow.from_client_secrets_file(
-                    secrets_path,
-                    scopes=[
-                        "https://www.googleapis.com/auth/calendar.events",
-                        "https://www.googleapis.com/auth/gmail.send"
-                    ],
-                    redirect_uri=redirect_uri,
-                    autogenerate_code_verifier=False
-                )
+            redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8001/api/auth/google/callback")
+            flow = get_google_flow(redirect_uri, state=executive_id)
+            if flow:
                 auth_url, _ = flow.authorization_url(
                     access_type='offline',
                     include_granted_scopes='true',
-                    prompt='consent',
-                    state=executive_id
+                    prompt='consent'
                 )
                 return auth_url
             else:
-                logger.warning("No Google credentials.json found in backend. Defaulting to mock auth link.")
+                logger.warning("No Google credentials configuration found. Defaulting to mock auth link.")
                 client_id = os.environ.get("GOOGLE_CLIENT_ID", "mock_google_client_id")
-                redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8001/api/auth/google/callback")
                 scope = "https://www.googleapis.com/auth/calendar.events+https://www.googleapis.com/auth/gmail.send"
                 return f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scope}&state={executive_id}&access_type=offline&prompt=consent"
         
@@ -165,25 +199,16 @@ class CalendarService:
         expires_at = datetime.utcnow() + timedelta(hours=1)
  
         if provider == "google":
-            secrets_path = get_google_client_config_path()
-            if secrets_path:
-                redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8001/api/auth/google/callback")
-                flow = Flow.from_client_secrets_file(
-                    secrets_path,
-                    scopes=[
-                        "https://www.googleapis.com/auth/calendar.events",
-                        "https://www.googleapis.com/auth/gmail.send"
-                    ],
-                    redirect_uri=redirect_uri,
-                    autogenerate_code_verifier=False
-                )
+            redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8001/api/auth/google/callback")
+            flow = get_google_flow(redirect_uri, state=executive_id)
+            if flow:
                 flow.fetch_token(code=code)
                 credentials = flow.credentials
                 access_token = credentials.token
                 refresh_token = credentials.refresh_token or ""
                 expires_at = credentials.expiry or (datetime.utcnow() + timedelta(hours=1))
         
-        # Persist token in SQLite
+        # Persist token in SQLite/Postgres
         token_entry = db.query(OAuthTokenDB).filter_by(executive_id=executive_id, provider=provider).first()
         if not token_entry:
             token_entry = OAuthTokenDB(
@@ -198,9 +223,9 @@ class CalendarService:
             token_entry.refresh_token = refresh_token
         token_entry.expires_at = expires_at
         db.commit()
-
+ 
         return {"status": "success", "message": f"{provider.capitalize()} account synced successfully."}
-
+ 
     @staticmethod
     def get_google_creds(db: Session, executive_id: str) -> Optional[Credentials]:
         """
@@ -210,18 +235,28 @@ class CalendarService:
         if not token_entry or token_entry.access_token.startswith("mock_"):
             return None
             
-        secrets_path = get_google_client_config_path()
-        if not secrets_path:
+        client_id = os.environ.get("GOOGLE_CLIENT_ID")
+        client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+        
+        # If not in env, check secrets files
+        if not (client_id and client_secret):
+            secrets_path = get_google_client_config_path()
+            if secrets_path:
+                try:
+                    with open(secrets_path, "r") as f:
+                        client_info = json.load(f)
+                        web_config = client_info.get("web", client_info.get("installed", {}))
+                        client_id = web_config.get("client_id")
+                        client_secret = web_config.get("client_secret")
+                except Exception as e:
+                    logger.error(f"Failed to read secrets file: {e}")
+                    
+        if not (client_id and client_secret):
+            logger.error("Google credentials not configured (no environment variables or credentials file found).")
             return None
-
+ 
         # Build credentials
         try:
-            with open(secrets_path, "r") as f:
-                client_info = json.load(f)
-                web_config = client_info.get("web", client_info.get("installed", {}))
-                client_id = web_config.get("client_id")
-                client_secret = web_config.get("client_secret")
-
             creds = Credentials(
                 token=token_entry.access_token,
                 refresh_token=token_entry.refresh_token,
@@ -230,7 +265,7 @@ class CalendarService:
                 client_secret=client_secret,
                 expiry=token_entry.expires_at
             )
-
+ 
             # Refresh if expired
             if creds.expired and creds.refresh_token:
                 logger.info("Google credentials expired. Refreshing token...")
@@ -238,11 +273,12 @@ class CalendarService:
                 token_entry.access_token = creds.token
                 token_entry.expires_at = creds.expiry
                 db.commit()
-
+ 
             return creds
         except Exception as e:
             logger.error(f"Failed to refresh/build Google credentials: {e}")
             return None
+
 
     @staticmethod
     def create_event(db: Session, executive_id: str, title: str, description: str, start_time: str, recipient: Optional[str] = None, timezone: str = "UTC", status: str = "confirmed") -> Dict[str, Any]:
@@ -392,50 +428,9 @@ class CalendarService:
     @staticmethod
     def list_upcoming_meetings(db: Session, executive_id: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """
-        Lists upcoming meetings for the executive, merging Google Calendar events
-        and locally approved database events.
+        Lists upcoming meetings for the executive from their Google Calendar.
+        Falls back to a mock sandbox list if not synced.
         """
-        # Fetch approved calendar actions from database
-        db_meetings = []
-        try:
-            db_actions = db.query(ActionItemDB).filter(
-                ActionItemDB.executive_id == executive_id,
-                ActionItemDB.type == "calendar",
-                ActionItemDB.status == "approved"
-            ).all()
-            
-            for act in db_actions:
-                # Find Google Meet link if present in description
-                meet_link = "https://meet.google.com/abc-defg-hij" # default fallback
-                if "Google Meet: " in act.description:
-                    try:
-                        meet_link = act.description.split("Google Meet: ")[1].split(")")[0].strip()
-                    except Exception:
-                        pass
-                
-                # Parse start/end times
-                start_iso = (datetime.utcnow() + timedelta(days=1)).isoformat()
-                end_iso = (datetime.utcnow() + timedelta(days=1, hours=1)).isoformat()
-                
-                parsed_dt = parse_datetime_flexible(act.time_proposed)
-                if parsed_dt:
-                    start_iso = parsed_dt.isoformat()
-                    end_iso = (parsed_dt + timedelta(minutes=45)).isoformat()
-                    
-                db_meetings.append({
-                    "id": act.id,
-                    "title": act.title,
-                    "description": act.description,
-                    "start_time": start_iso,
-                    "end_time": end_iso,
-                    "meet_link": meet_link,
-                    "attendees": [act.recipient] if act.recipient else [],
-                    "status": "confirmed"
-                })
-        except Exception as e:
-            logger.error(f"Error querying database for upcoming meetings: {e}")
-
-        # Check Google Calendar if credentials exist
         creds = CalendarService.get_google_creds(db, executive_id)
         if creds:
             try:
@@ -452,11 +447,11 @@ class CalendarService:
                 ).execute()
                 
                 events = events_result.get('items', [])
-                google_meetings = []
+                meetings = []
                 for event in events:
                     start_time = event.get('start', {}).get('dateTime') or event.get('start', {}).get('date')
                     end_time = event.get('end', {}).get('dateTime') or event.get('end', {}).get('date')
-                    google_meetings.append({
+                    meetings.append({
                         "id": event.get('id'),
                         "title": event.get('summary', 'Untitled Meeting'),
                         "description": event.get('description', ''),
@@ -466,33 +461,21 @@ class CalendarService:
                         "attendees": [att.get('email') for att in event.get('attendees', []) if att.get('email')],
                         "status": event.get('status')
                     })
-                
-                # Merge database meetings that aren't already represented in Google Calendar list
-                merged = list(google_meetings)
-                for db_m in db_meetings:
-                    exists = False
-                    for g_m in google_meetings:
-                        g_start = g_m["start_time"][:16] if g_m["start_time"] else ""
-                        db_start = db_m["start_time"][:16] if db_m["start_time"] else ""
-                        if g_start == db_start and g_m["title"].lower() == db_m["title"].lower():
-                            exists = True
-                            break
-                    if not exists:
-                        merged.append(db_m)
-                        
-                # Sort and slice
-                try:
-                    merged.sort(key=lambda m: m["start_time"])
-                except Exception:
-                    pass
-                return merged[:max_results]
-                
+                return meetings
             except Exception as e:
                 logger.error(f"Error fetching upcoming Google Calendar meetings: {e}")
-
-        # If not synced or error occurred, combine database meetings with default static mocks
+                
+        # Mock fallback
+        # Let's return some mock upcoming meetings matching the active executive!
+        from database import ExecutiveDB
+        exec_db = db.query(ExecutiveDB).filter_by(id=executive_id).first()
+        exec_name = exec_db.name if exec_db else "Sarah Jenkins"
+        
+        # Let's dynamically generate dates relative to today
         today = datetime.now()
-        static_mocks = [
+        
+        # Some mock meetings
+        return [
             {
                 "id": "mock_meet_1",
                 "title": "Weekly Strategy & Q3 Planning",
@@ -524,11 +507,3 @@ class CalendarService:
                 "status": "confirmed"
             }
         ]
-        
-        all_meetings = db_meetings + static_mocks
-        try:
-            all_meetings.sort(key=lambda m: m["start_time"])
-        except Exception:
-            pass
-            
-        return all_meetings[:max_results]
