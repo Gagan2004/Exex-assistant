@@ -280,12 +280,27 @@ def get_auth_status(executive_id: str, db: Session = Depends(get_db)):
     Checks connection status for Google Calendar integration.
     """
     google_token = db.query(OAuthTokenDB).filter_by(executive_id=executive_id, provider="google").first()
-    has_google = google_token is not None and not google_token.access_token.startswith("mock_")
+    
+    has_google = False
+    if google_token is not None:
+        if google_token.access_token.startswith("mock_"):
+            has_google = True
+        else:
+            # Check if credentials can be built/refreshed
+            creds = CalendarService.get_google_creds(db, executive_id)
+            if creds is not None:
+                has_google = True
+            else:
+                # Token is invalid or unrefreshable (e.g. client ID changed).
+                # Remove it so the user can re-sync.
+                db.delete(google_token)
+                db.commit()
     
     return {
         "google_connected": has_google,
         "google_email": "Connected" if has_google else "Disconnected"
     }
+
 
 @app.get("/api/auth/{provider}/url")
 def get_auth_url(provider: str, executive_id: str):
