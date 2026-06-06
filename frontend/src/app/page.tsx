@@ -55,9 +55,8 @@ export default function Dashboard() {
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(false);
-  const [voiceText, setVoiceText] = useState("");
-  const [inputText, setInputText] = useState("");
-  const [activeInputTab, setActiveInputTab] = useState<"voice" | "text">("voice");
+  const [directiveText, setDirectiveText] = useState("");
+  const [wasVoiceCaptured, setWasVoiceCaptured] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -86,7 +85,8 @@ export default function Dashboard() {
         rec.onresult = (event: any) => {
           const transcript = event.results[0][0].transcript;
           if (transcript) {
-            setVoiceText(transcript);
+            setDirectiveText(transcript);
+            setWasVoiceCaptured(true);
           }
         };
         
@@ -301,69 +301,47 @@ export default function Dashboard() {
     return false;
   };
 
-  const submitVoiceMemo = async (e: React.FormEvent) => {
+  const submitDirective = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!voiceText.trim() || !selectedExec) return;
+    if (!directiveText.trim() || !selectedExec) return;
+
+    const endpoint = wasVoiceCaptured ? "voice-action" : "text-action";
+    const modeLabel = wasVoiceCaptured ? "Voice" : "Text";
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const res = await fetch(`${backendUrl}/api/voice-action?executive_id=${selectedExec.id}&text=${encodeURIComponent(voiceText)}`, {
+      const res = await fetch(`${backendUrl}/api/${endpoint}?executive_id=${selectedExec.id}&text=${encodeURIComponent(directiveText)}`, {
         method: "POST",
         headers: {
           "X-Timezone": tz
         }
       });
-      const handled = await handleInputResponse(res, () => setVoiceText(""));
-      if (!handled) throw new Error();
-    } catch (err) {
-      // Local fallback addition
-      const mockNew: ActionItem = {
-        id: `act_${Date.now()}`,
-        type: voiceText.toLowerCase().includes("meet") || voiceText.toLowerCase().includes("schedule") ? "calendar" : "task",
-        title: "New Task from Voice Input",
-        description: `Memo details: "${voiceText}"`,
-        status: "pending",
-        executive_id: selectedExec.id,
-        time_proposed: voiceText.toLowerCase().includes("meet") ? "Proposed: Tomorrow at 11:00 AM (Soft-Lock)" : undefined
-      };
-      setActions(prev => [mockNew, ...prev]);
-      setVoiceText(" "); // force clear trigger
-      setTimeout(() => setVoiceText(""), 100);
-      showToast("Voice memo processed (Simulated)", "success");
-    }
-  };
-
-  const submitTextDirective = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || !selectedExec) return;
-
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const res = await fetch(`${backendUrl}/api/text-action?executive_id=${selectedExec.id}&text=${encodeURIComponent(inputText)}`, {
-        method: "POST",
-        headers: {
-          "X-Timezone": tz
-        }
+      const handled = await handleInputResponse(res, () => {
+        setDirectiveText("");
+        setWasVoiceCaptured(false);
       });
-      const handled = await handleInputResponse(res, () => setInputText(""));
       if (!handled) throw new Error();
     } catch (err) {
       // Local fallback addition
       const mockNew: ActionItem = {
         id: `act_${Date.now()}`,
-        type: inputText.toLowerCase().includes("meet") || inputText.toLowerCase().includes("schedule") ? "calendar" : "task",
-        title: "New Task from Text Input",
-        description: `Text details: "${inputText}"`,
+        type: directiveText.toLowerCase().includes("meet") || directiveText.toLowerCase().includes("schedule") ? "calendar" : "task",
+        title: `New Task from ${modeLabel} Input`,
+        description: `${modeLabel} details: "${directiveText}"`,
         status: "pending",
         executive_id: selectedExec.id,
-        time_proposed: inputText.toLowerCase().includes("meet") ? "Proposed: Tomorrow at 3:00 PM (Soft-Lock)" : undefined
+        time_proposed: directiveText.toLowerCase().includes("meet") ? "Proposed: Tomorrow at 2:00 PM (Soft-Lock)" : undefined
       };
       setActions(prev => [mockNew, ...prev]);
-      setInputText(" ");
-      setTimeout(() => setInputText(""), 100);
-      showToast("Text directive processed (Simulated)", "success");
+      setDirectiveText(" "); // force clear trigger
+      setTimeout(() => {
+        setDirectiveText("");
+        setWasVoiceCaptured(false);
+      }, 100);
+      showToast(`${modeLabel} directive processed (Simulated)`, "success");
     }
   };
+
 
   const submitModalForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -428,7 +406,8 @@ export default function Dashboard() {
 
       // Simulate speaking / processing delays
       setTimeout(() => {
-        setVoiceText(randomMemo);
+        setDirectiveText(randomMemo);
+        setWasVoiceCaptured(true);
         setIsRecording(false);
       }, 2500);
     }
@@ -446,7 +425,8 @@ export default function Dashboard() {
       recognition.stop();
     } else {
       try {
-        setVoiceText("");
+        setDirectiveText("");
+        setWasVoiceCaptured(true);
         recognition.start();
       } catch (err) {
         console.error(err);
@@ -579,101 +559,57 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Input Interface: Voice or Text Directive */}
+          {/* Input Interface: Unified Voice and Text Directive Capture */}
           <div className="bg-neutral-900/60 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-6 flex flex-col gap-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800/80 pb-4">
               <div>
                 <h3 className="text-md font-bold text-white flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-blue-400" /> Executive Directive Capture
                 </h3>
-                <p className="text-xs text-neutral-500 mt-1">Submit natural language commands via voice or text.</p>
-              </div>
-
-              {/* Tab Selector */}
-              <div className="flex gap-1 p-1 bg-neutral-950 border border-neutral-800 rounded-xl self-start">
-                <button
-                  type="button"
-                  onClick={() => setActiveInputTab("voice")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeInputTab === "voice"
-                      ? "bg-neutral-800 text-white shadow shadow-black/40"
-                      : "text-neutral-500 hover:text-neutral-300"
-                    }`}
-                >
-                  <Mic className="h-3.5 w-3.5" /> Voice Memo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveInputTab("text")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeInputTab === "text"
-                      ? "bg-neutral-800 text-white shadow shadow-black/40"
-                      : "text-neutral-500 hover:text-neutral-300"
-                    }`}
-                >
-                  <Mail className="h-3.5 w-3.5" /> Typed Directive
-                </button>
+                <p className="text-xs text-neutral-500 mt-1">Type an instruction directly or click the microphone to dictate.</p>
               </div>
             </div>
 
-            {activeInputTab === "voice" ? (
-              <form onSubmit={submitVoiceMemo} className="flex flex-col gap-3">
-                <div className="relative">
-                  <textarea
-                    value={voiceText}
-                    onChange={(e) => setVoiceText(e.target.value)}
-                    placeholder="Record voice memo or wait for transcription... (e.g., 'Schedule meeting with Dave for next Monday at 2 PM')"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all min-h-[90px] resize-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleVoiceRecord}
-                    className={`absolute right-3 bottom-3 p-3 rounded-full transition-all duration-300 cursor-pointer ${isRecording
-                        ? "bg-red-500 animate-pulse text-white shadow-lg shadow-red-500/20"
-                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-                      }`}
-                    title="Voice Record"
-                  >
-                    {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                  </button>
-                </div>
-
-                {isRecording && (
-                  <div className="flex items-center gap-2 text-xs text-red-400 font-medium animate-pulse">
-                    <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                    Recording/Transcribing Executive voice memo...
-                  </div>
-                )}
-
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={!voiceText.trim()}
-                    className="bg-gradient-to-r from-blue-600 to-violet-600 disabled:from-neutral-800 disabled:to-neutral-850 disabled:text-neutral-600 text-white font-semibold text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 transition hover:opacity-95 shadow-md shadow-blue-900/10 cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" /> Process Voice Action Card
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={submitTextDirective} className="flex flex-col gap-3">
+            <form onSubmit={submitDirective} className="flex flex-col gap-3">
+              <div className="relative">
                 <textarea
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Type a manual instruction or directive... (e.g., 'Draft email to John confirming the meeting change for tomorrow')"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all min-h-[90px] resize-none"
+                  value={directiveText}
+                  onChange={(e) => setDirectiveText(e.target.value)}
+                  placeholder="Type or dictate an instruction... (e.g., 'Schedule meeting with Dave for next Monday at 2 PM')"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 pr-14 text-sm text-neutral-200 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all min-h-[90px] resize-none"
                 />
+                <button
+                  type="button"
+                  onClick={handleVoiceRecord}
+                  className={`absolute right-3 bottom-3 p-3 rounded-full transition-all duration-300 cursor-pointer ${isRecording
+                      ? "bg-red-500 animate-pulse text-white shadow-lg shadow-red-500/20"
+                      : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+                    }`}
+                  title="Voice Record"
+                >
+                  {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </button>
+              </div>
 
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={!inputText.trim()}
-                    className="bg-gradient-to-r from-blue-600 to-violet-600 disabled:from-neutral-800 disabled:to-neutral-850 disabled:text-neutral-600 text-white font-semibold text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 transition hover:opacity-95 shadow-md shadow-blue-900/10 cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" /> Process Text Directive
-                  </button>
+              {isRecording && (
+                <div className="flex items-center gap-2 text-xs text-red-400 font-medium animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                  Recording/Transcribing Executive voice memo...
                 </div>
-              </form>
-            )}
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={!directiveText.trim()}
+                  className="bg-gradient-to-r from-blue-600 to-violet-600 disabled:from-neutral-800 disabled:to-neutral-850 disabled:text-neutral-600 text-white font-semibold text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 transition hover:opacity-95 shadow-md shadow-blue-900/10 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" /> Process Directive
+                </button>
+              </div>
+            </form>
           </div>
+
 
           {/* Pending Approval / HITL Workspace Queue */}
           <div className="bg-neutral-900/60 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-6 flex flex-col gap-4">
