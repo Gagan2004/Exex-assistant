@@ -1,0 +1,71 @@
+19 - Personal AI-Powered Executive Assistant PRD
+Program: makeitnow.ai Productized Services PRD
+Date: June 3, 2026 | Use: Internal developer handbook and PRD | Status: Draft v1
+Service type
+Personal operating system and high-trust assistant
+One-line purpose
+Help a single operator manage priorities, communication, scheduling, and follow-through with AI-assisted support.
+Ideal audience
+Founders, operators, and executives who need an assistant-like workflow system but do not want to rely on a fully manual EA.
+Primary problem
+Important tasks, messages, meetings, and follow-ups get scattered across tools and memory, creating avoidable friction and missed decisions.
+
+End Goal Expectations
+Make personal operations more organized, predictable, and low-friction.
+Reduce repetitive manual coordination work.
+Turn recurring management tasks into repeatable AI-assisted systems.
+Detailed Requirements
+Client inputs
+The operator must identify the highest-value personal EA workflows before automation starts.
+The operator must define which tasks can be handled automatically and which require review.
+Sensitive actions, approvals, and communication boundaries must be explicitly defined.
+At least one workflow should produce a measurable result after launch.
+Delivery requirements
+The personal operating workflow should be mapped before automation starts.
+The system must save time, reduce missed actions, or improve clarity in a visible way.
+The assistant should be able to draft, organize, summarize, or prioritize with minimal correction.
+Deliverables
+Workflow inventory with priority ranking.
+Prototype implementation of the first high-value workflows.
+Prompt, instruction, or agent configuration notes.
+Failure log and human-review boundaries.
+Recommendation for the best first version of the personal AI EA.
+Version 2 roadmap.
+Acceptance Criteria
+At least three real EA workflows are tested.
+Each tested workflow has a clear output and assessment.
+The output clearly separates reliable automation, partial automation, and human-required steps.
+The final recommendation is specific enough to turn into a build plan.
+Success Metrics
+The operator can restate the problem, scope, and next decision without extra clarification.
+The output is specific enough to build, validate, or price without rewriting the brief.
+The experiment produces a measurable productivity gain or a production-ready workflow asset.
+The work leaves behind reusable prompts, workflow templates, or operating rules where applicable.
+Typical Package Ladder
+Diagnostic: 5 days, $3,500.
+Prototype: 14 days, $9,500.
+Managed: $3,500 per month.
+Pricing and Profitability
+The ladder prices are starting fixed-scope floors, not discount targets.
+Standard packages should target roughly 65 to 75 percent gross margin before custom work or exceptions.
+Anything involving sensitive data, broad permissions, cross-tool coordination, or high-trust communication should move up a tier or become a custom quote.
+Use milestone billing when scope is longer than a short sprint: 50/25/25 for short projects and 40/30/30 for larger builds.
+Every engagement should create reusable IP, templates, or playbooks; if not, the scope or price should be revised.
+If the work depends on broad handholding or open-ended changes, narrow the scope before agreeing to the price.
+Rare-Case Pricing Triggers
+Access to sensitive inboxes or calendars.
+Multi-tool synchronization.
+Complex approval paths.
+High-trust delegation or executive confidentiality requirements.
+Best Follow-On Services
+Calendar and inbox automation
+Meeting prep and follow-up systems
+Voice-to-task capture workflows
+Agentic workflow architecture
+Internal Notes
+This is a high-leverage personal operating layer, not a generic chatbot.
+The best assistant is the one that removes friction without creating new supervision overhead.
+End state: a personal AI assistant system that can be trusted for real daily management work without creating hidden operational risk.
+
+
+**You can also use hermes for this
