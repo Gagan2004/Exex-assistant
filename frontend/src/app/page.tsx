@@ -68,11 +68,13 @@ export default function Dashboard() {
   const [modalRecipientInput, setModalRecipientInput] = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
   
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || (typeof window !== "undefined"
+  const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || (typeof window !== "undefined"
     ? (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? "http://127.0.0.1:8001"
       : "/_/backend")
     : "http://127.0.0.1:8001");
+  const backendUrl = rawBackendUrl.endsWith("/") ? rawBackendUrl.slice(0, -1) : rawBackendUrl;
+
 
 
 
