@@ -67,7 +67,45 @@ export default function Dashboard() {
   const [modalTitleInput, setModalTitleInput] = useState("");
   const [modalRecipientInput, setModalRecipientInput] = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [recognition, setRecognition] = useState<any>(null);
 
+  // Initialize SpeechRecognition on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const rec = new SpeechRecognition();
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.lang = "en-US";
+        
+        rec.onstart = () => {
+          setIsRecording(true);
+        };
+        
+        rec.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          if (transcript) {
+            setVoiceText(transcript);
+          }
+        };
+        
+        rec.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          if (event.error !== "no-speech") {
+            showToast(`Voice capture error: ${event.error}`, "error");
+          }
+          setIsRecording(false);
+        };
+        
+        rec.onend = () => {
+          setIsRecording(false);
+        };
+        
+        setRecognition(rec);
+      }
+    }
+  }, []);
   const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || (typeof window !== "undefined"
     ? (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? "http://127.0.0.1:8001"
@@ -396,6 +434,27 @@ export default function Dashboard() {
     }
   };
 
+  const handleVoiceRecord = () => {
+    if (!recognition) {
+      // Fallback if SpeechRecognition is not supported
+      showToast("Speech recognition not supported. Using simulation...");
+      handleMockRecord();
+      return;
+    }
+
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      try {
+        setVoiceText("");
+        recognition.start();
+      } catch (err) {
+        console.error(err);
+        setIsRecording(false);
+      }
+    }
+  };
+
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none antialiased relative overflow-hidden">
       {/* Background gradients */}
@@ -573,12 +632,12 @@ export default function Dashboard() {
                   />
                   <button
                     type="button"
-                    onClick={handleMockRecord}
+                    onClick={handleVoiceRecord}
                     className={`absolute right-3 bottom-3 p-3 rounded-full transition-all duration-300 cursor-pointer ${isRecording
                         ? "bg-red-500 animate-pulse text-white shadow-lg shadow-red-500/20"
                         : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20"
                       }`}
-                    title="Mock Voice Record"
+                    title="Voice Record"
                   >
                     {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                   </button>
