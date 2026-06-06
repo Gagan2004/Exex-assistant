@@ -71,7 +71,7 @@ export default function Dashboard() {
   const backendUrl = typeof window !== "undefined"
     ? (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? "http://127.0.0.1:8001"
-      : "")
+      : "/_/backend")
     : "http://127.0.0.1:8001";
 
 
