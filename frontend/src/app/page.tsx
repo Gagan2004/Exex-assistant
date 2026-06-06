@@ -529,11 +529,7 @@ export default function Dashboard() {
           <div className="bg-neutral-900/60 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-5 flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-neutral-300">System Preferences</h3>
             <div className="space-y-2 text-xs text-neutral-400 leading-relaxed">
-              <div className="flex justify-between border-b border-neutral-800 pb-1.5">
-                <span>HITL Approval Mode</span>
-                <span className="text-blue-400 font-semibold">Enabled</span>
-              </div>
-              <div className="flex justify-between border-b border-neutral-800 pb-1.5 items-center">
+              <div className="flex justify-between items-center">
                 <span>Google Calendar Sync</span>
                 {googleConnected ? (
                   <span className="text-emerald-400 font-semibold flex items-center gap-1">
@@ -548,12 +544,9 @@ export default function Dashboard() {
                   </button>
                 )}
               </div>
-              <div className="flex justify-between items-center">
-                <span>Office 365 Sync</span>
-                <span className="text-emerald-400 font-semibold">Active</span>
-              </div>
             </div>
           </div>
+
         </aside>
 
         {/* Main Content Area */}
