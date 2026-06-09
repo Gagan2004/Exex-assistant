@@ -64,16 +64,16 @@ def parse_voice_transcription(text: str) -> Dict[str, Any]:
     
     keys = get_all_gemini_keys()
     
-    print("\n[Hermes Agent Workflow] Starting transcription parsing...")
-    print(f"[Hermes Agent Workflow] Input text: '{text}'")
+    print("\n[Co-Pilot Agent Workflow] Starting transcription parsing...")
+    print(f"[Co-Pilot Agent Workflow] Input text: '{text}'")
     
     if not keys:
-        print("[Hermes Agent Workflow] No Gemini API keys found. Falling back to heuristics.")
+        print("[Co-Pilot Agent Workflow] No Gemini API keys found. Falling back to heuristics.")
         logger.warning("No Gemini API keys found in environment or .env. Falling back to local heuristic parsing.")
         return parse_heuristically(text)
         
     masked_keys = [f"{k[:6]}...{k[-4:]}" if len(k) > 10 else "Invalid" for k in keys]
-    print(f"[Hermes Agent Workflow] Loaded key pool: {masked_keys}")
+    print(f"[Co-Pilot Agent Workflow] Loaded key pool: {masked_keys}")
     
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import JsonOutputParser
@@ -82,13 +82,13 @@ def parse_voice_transcription(text: str) -> Dict[str, Any]:
     
     for idx, api_key in enumerate(keys):
         masked_key = f"{api_key[:6]}...{api_key[-4:]}" if len(api_key) > 10 else "Invalid/Short Key"
-        print(f"\n[Hermes Agent Workflow] [Attempt {idx + 1}/{len(keys)}] Using API key: {masked_key}")
+        print(f"\n[Co-Pilot Agent Workflow] [Attempt {idx + 1}/{len(keys)}] Using API key: {masked_key}")
         
         try:
             model_name = os.environ.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
             
             if openrouter_key:
-                print("[Hermes Agent Workflow] OpenRouter API Key detected. Initializing OpenRouter wrapper...")
+                print("[Co-Pilot Agent Workflow] OpenRouter API Key detected. Initializing OpenRouter wrapper...")
                 from langchain_openai import ChatOpenAI
                 llm = ChatOpenAI(
                     model=os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-4-340b-instruct"),
@@ -102,11 +102,11 @@ def parse_voice_transcription(text: str) -> Dict[str, Any]:
                     google_api_key=api_key,
                     temperature=0.2
                 )
-
+ 
             parser = JsonOutputParser(pydantic_object=ParsedActionCard)
-
+ 
             prompt = ChatPromptTemplate.from_template(
-                "You are Hermes, a premium high-trust AI Executive Assistant.\n"
+                "You are a premium high-trust AI Executive Assistant.\n"
                 "Current date and time context: {current_time}\n\n"
                 "Analyze the executive's voice memo transcription below and extract the structured action request.\n"
                 "Executive Memo: \"{memo_text}\"\n\n"
@@ -116,20 +116,20 @@ def parse_voice_transcription(text: str) -> Dict[str, Any]:
                 "- If you cannot find a guest's email address or contact info, set 'recipient' to null/None. Do NOT generate email addresses (like guest@company.com).\n\n"
                 "{format_instructions}\n"
             )
-
+ 
             chain = prompt | llm | parser
             
             from datetime import datetime
             current_time_str = datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
             
-            print(f"[Hermes Agent Workflow] Invoking Gemini LLM chain with key {masked_key}...")
+            print(f"[Co-Pilot Agent Workflow] Invoking Gemini LLM chain with key {masked_key}...")
             result = chain.invoke({
                 "memo_text": text,
                 "current_time": current_time_str,
                 "format_instructions": parser.get_format_instructions()
             })
             
-            print(f"[Hermes Agent Workflow] Gemini raw parsed output: {result}")
+            print(f"[Co-Pilot Agent Workflow] Gemini raw parsed output: {result}")
             
             # Map fields to match database schema
             mapped_result = {
@@ -139,16 +139,16 @@ def parse_voice_transcription(text: str) -> Dict[str, Any]:
                 "time_proposed": result.get("time_proposed"),
                 "recipient": result.get("recipient")
             }
-            print(f"[Hermes Agent Workflow] Success! Mapped action item: {mapped_result}")
+            print(f"[Co-Pilot Agent Workflow] Success! Mapped action item: {mapped_result}")
             return mapped_result
-
+ 
         except Exception as e:
-            print(f"[Hermes Agent Workflow] ERROR: LLM execution failed for key {masked_key}: {e}")
+            print(f"[Co-Pilot Agent Workflow] ERROR: LLM execution failed for key {masked_key}: {e}")
             import traceback
             traceback.print_exc()
             logger.warning(f"Error calling LLM agent with key {masked_key}: {e}. Rotating to next key.")
             
-    print("\n[Hermes Agent Workflow] All Gemini API keys failed. Falling back to heuristic parser.")
+    print("\n[Co-Pilot Agent Workflow] All Gemini API keys failed. Falling back to heuristic parser.")
     logger.error("All Gemini API keys failed. Falling back to local heuristic parsing.")
     return parse_heuristically(text)
 

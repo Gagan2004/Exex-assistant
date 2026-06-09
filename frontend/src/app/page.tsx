@@ -1073,7 +1073,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
-                Hermes AI Co-Pilot
+                Executive AI Co-Pilot
               </h1>
               <p className="text-xs text-neutral-500 font-medium mt-1">
                 Personal Executive Assistant SaaS &mdash; {isSignUp ? "Create an Account" : "Portal Sign In"}
@@ -1246,7 +1246,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
-              Hermes AI Co-Pilot
+              Executive AI Co-Pilot
             </h1>
             <p className="text-xs text-neutral-500 font-medium">Personal Executive Assistant SaaS</p>
           </div>
@@ -2109,7 +2109,7 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center gap-2 text-blue-400 font-bold text-lg mb-1">
                 <Sparkles className="h-5 w-5" />
-                <span>Hermes Needs Details</span>
+                <span>Co-Pilot Needs Details</span>
               </div>
               <p className="text-xs text-neutral-400">
                 To schedule this meeting, please provide the required parameters below. Hallucinations are disabled.
