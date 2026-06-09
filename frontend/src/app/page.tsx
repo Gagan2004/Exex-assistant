@@ -96,6 +96,40 @@ export default function Dashboard() {
   const [adminWorkspaces, setAdminWorkspaces] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   
+  // Persistent Directive History state
+  const [directiveHistory, setDirectiveHistory] = useState<{ id: string; query: string; type: "voice" | "text"; timestamp: string; status: "Processed" | "Slot Details Required" }[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("directive_history");
+      if (stored) {
+        try {
+          setDirectiveHistory(JSON.parse(stored));
+        } catch (e) {
+          console.error("Failed to parse directive history", e);
+        }
+      }
+    }
+  }, []);
+
+  const addHistoryEntry = (query: string, type: "voice" | "text", status: "Processed" | "Slot Details Required") => {
+    const newEntry = {
+      id: `history_${Date.now()}`,
+      query,
+      type,
+      timestamp: new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      status
+    };
+    setDirectiveHistory(prev => {
+      const updated = [newEntry, ...prev].slice(0, 5); // Limit to last 5 entries
+      if (typeof window !== "undefined") {
+        localStorage.setItem("directive_history", JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+  
   // Admin Modals and Form States
   const [isAdminUserModalOpen, setIsAdminUserModalOpen] = useState(false);
   const [selectedAdminUser, setSelectedAdminUser] = useState<any | null>(null); // null means adding a new user
@@ -889,6 +923,8 @@ export default function Dashboard() {
 
     const endpoint = wasVoiceCaptured ? "voice-action" : "text-action";
     const modeLabel = wasVoiceCaptured ? "Voice" : "Text";
+    const modeType: "voice" | "text" = wasVoiceCaptured ? "voice" : "text";
+    const currentQuery = directiveText;
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -898,6 +934,10 @@ export default function Dashboard() {
           "X-Timezone": tz
         }
       });
+      
+      const loggedStatus = res.status === 422 ? "Slot Details Required" : "Processed";
+      addHistoryEntry(currentQuery, modeType, loggedStatus);
+
       const handled = await handleInputResponse(res, () => {
         setDirectiveText("");
         setWasVoiceCaptured(false);
@@ -905,14 +945,15 @@ export default function Dashboard() {
       if (!handled) throw new Error();
     } catch (err) {
       // Local fallback addition
+      addHistoryEntry(currentQuery, modeType, "Processed");
       const mockNew: ActionItem = {
         id: `act_${Date.now()}`,
-        type: directiveText.toLowerCase().includes("meet") || directiveText.toLowerCase().includes("schedule") ? "calendar" : "task",
+        type: currentQuery.toLowerCase().includes("meet") || currentQuery.toLowerCase().includes("schedule") ? "calendar" : "task",
         title: `New Task from ${modeLabel} Input`,
-        description: `${modeLabel} details: "${directiveText}"`,
+        description: `${modeLabel} details: "${currentQuery}"`,
         status: "pending",
         executive_id: selectedExec.id,
-        time_proposed: directiveText.toLowerCase().includes("meet") ? "Proposed: Tomorrow at 2:00 PM (Soft-Lock)" : undefined
+        time_proposed: currentQuery.toLowerCase().includes("meet") ? "Proposed: Tomorrow at 2:00 PM (Soft-Lock)" : undefined
       };
       setActions(prev => [mockNew, ...prev]);
       setDirectiveText(" "); // force clear trigger
@@ -1332,7 +1373,7 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-neutral-850 text-sm">
                       {adminUsers.map((usr) => (
-                        <tr key={usr.id} className="hover:bg-neutral-900/20 transition-colors">
+                        <tr key={usr.id} className="hover:bg-neutral-900/40 transition-colors group">
                           <td className="py-3.5 px-4 font-semibold text-white">{usr.name}</td>
                           <td className="py-3.5 px-4 text-neutral-405">{usr.email}</td>
                           <td className="py-3.5 px-4">
@@ -1420,7 +1461,7 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-neutral-850 text-sm">
                       {adminWorkspaces.map((work) => (
-                        <tr key={work.id} className="hover:bg-neutral-900/20 transition-colors">
+                        <tr key={work.id} className="hover:bg-neutral-900/40 transition-colors group">
                           <td className="py-3.5 px-4 flex items-center gap-3">
                             <img src={work.avatar} className="h-9 w-9 rounded-full object-cover border border-neutral-700" alt={work.name} />
                             <div>
@@ -1636,6 +1677,69 @@ export default function Dashboard() {
         {/* Main Content Area */}
         <section className="lg:col-span-3 flex flex-col gap-6">
 
+          {/* Workspace Analytics Metrics Row */}
+          {selectedExec && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-scaleUp">
+              {/* Card 1: Active Actions */}
+              <div className="bg-neutral-900/50 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-4 flex flex-col gap-1 transition-all duration-300 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-0.5">
+                <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Active Actions</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-extrabold text-white">{actions.length}</span>
+                  <span className="text-xs text-neutral-400">pending</span>
+                </div>
+              </div>
+
+              {/* Card 2: Upcoming Meetings */}
+              <div className="bg-neutral-900/50 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-4 flex flex-col gap-1 transition-all duration-300 hover:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/5 hover:-translate-y-0.5">
+                <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Scheduled Meetings</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-extrabold text-white">{meetings.length}</span>
+                  <span className="text-xs text-neutral-400">upcoming</span>
+                </div>
+              </div>
+
+              {/* Card 3: Integration Sync */}
+              <button
+                onClick={() => !googleConnected && !isReadOnly && syncCalendar("google")}
+                disabled={isReadOnly || googleConnected}
+                className={`text-left bg-neutral-900/50 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-4 flex flex-col gap-1 transition-all duration-300 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5 hover:-translate-y-0.5 ${(!googleConnected && !isReadOnly) ? 'cursor-pointer' : 'cursor-default'}`}
+              >
+                <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Google Calendar</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {googleConnected ? (
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-pulseGlow">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Synced
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-neutral-400 flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-neutral-600" /> Click to Sync
+                    </span>
+                  )}
+                </div>
+              </button>
+
+              {/* Card 4: Access Level */}
+              <div className="bg-neutral-900/50 border border-neutral-800/60 backdrop-blur-lg rounded-2xl p-4 flex flex-col gap-1 transition-all duration-300 hover:border-amber-500/30 hover:shadow-lg hover:shadow-amber-500/5 hover:-translate-y-0.5">
+                <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Access Level</span>
+                <div className="flex items-center mt-1">
+                  {selectedExec.owner_id === currentUser?.id ? (
+                    <span className="text-xs font-extrabold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full capitalize">
+                      Workspace Owner
+                    </span>
+                  ) : selectedExec.permission === "write" ? (
+                    <span className="text-xs font-extrabold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2.5 py-0.5 rounded-full capitalize">
+                      Read & Write
+                    </span>
+                  ) : (
+                    <span className="text-xs font-extrabold text-amber-555 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full capitalize">
+                      Read-Only
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Active Executive Profile Header */}
           {selectedExec && (
             <div className="bg-gradient-to-r from-neutral-900 via-neutral-900 to-neutral-900/40 border border-neutral-800/80 rounded-2xl p-6 flex items-center justify-between">
@@ -1728,6 +1832,50 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+
+            {directiveHistory.length > 0 && (
+              <div className="border-t border-neutral-800/80 pt-4 mt-2 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                  className="flex items-center justify-between text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer font-semibold py-1 focus:outline-none transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" /> Recent Directives Log
+                  </span>
+                  <span>{isHistoryOpen ? "Hide History" : "Show History"}</span>
+                </button>
+
+                {isHistoryOpen && (
+                  <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1 animate-scaleUp">
+                    {directiveHistory.map((hist) => (
+                      <div key={hist.id} className="bg-neutral-950/45 border border-neutral-850/60 rounded-xl p-2.5 flex items-center justify-between gap-4 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] shrink-0 ${
+                            hist.type === 'voice' 
+                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/15'
+                              : 'bg-violet-500/10 text-violet-400 border border-violet-500/15'
+                          }`}>
+                            {hist.type}
+                          </span>
+                          <span className="text-neutral-300 truncate" title={hist.query}>{hist.query}</span>
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <span className={`text-[9.5px] font-semibold px-2 py-0.5 rounded-md ${
+                            hist.status === 'Processed'
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-amber-500/10 text-amber-400'
+                          }`}>
+                            {hist.status}
+                          </span>
+                          <span className="text-[10px] text-neutral-505">{hist.timestamp}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
 
@@ -1746,11 +1894,26 @@ export default function Dashboard() {
                 <span className="text-sm text-neutral-500">Loading workspace actions...</span>
               </div>
             ) : actions.length === 0 ? (
-              <div className="border border-dashed border-neutral-800 rounded-xl p-12 text-center flex flex-col items-center gap-3 bg-neutral-950/20">
-                <CheckCircle2 className="h-10 w-10 text-neutral-700" />
-                <div>
-                  <p className="text-sm font-semibold text-neutral-400">All caught up!</p>
-                  <p className="text-xs text-neutral-600 mt-1">No action items awaiting approval for {selectedExec?.name}.</p>
+              <div className="border border-dashed border-neutral-800/80 rounded-2xl p-12 text-center flex flex-col items-center gap-4 bg-neutral-950/10 animate-scaleUp relative overflow-hidden">
+                {/* Visual Glow Spotlight */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full bg-blue-500/5 blur-[50px] pointer-events-none" />
+                
+                {/* Beautiful Inline SVG Illustration */}
+                <div className="relative animate-float">
+                  <svg className="h-16 w-16 text-blue-500/30" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="32" cy="32" r="30" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
+                    <rect x="22" y="16" width="20" height="26" rx="3" stroke="currentColor" strokeWidth="2" />
+                    <path d="M28 24H36M28 30H36M28 36H32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M40 40L48 48M48 48L52 44M48 48L44 52" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="32" cy="12" r="4" fill="currentColor" className="text-blue-500/50" />
+                  </svg>
+                </div>
+                
+                <div className="relative z-10 flex flex-col gap-1.5 max-w-sm mx-auto">
+                  <p className="text-sm font-bold text-neutral-200">Inbox Clean & Clear</p>
+                  <p className="text-xs text-neutral-500 leading-relaxed">
+                    No operations are currently pending in the Human-in-the-Loop queue for {selectedExec?.name}.
+                  </p>
                 </div>
               </div>
             ) : (
@@ -1758,7 +1921,7 @@ export default function Dashboard() {
                 {actions.map((action) => (
                   <div
                     key={action.id}
-                    className="border border-neutral-800 bg-neutral-950/60 rounded-xl p-5 flex flex-col justify-between gap-4 transition hover:border-neutral-700 duration-300"
+                    className="border border-neutral-800 bg-neutral-950/60 rounded-2xl p-5 flex flex-col justify-between gap-4 transition-all duration-300 hover:border-neutral-700/80 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-0.5"
                   >
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
@@ -1834,10 +1997,29 @@ export default function Dashboard() {
             </p>
 
             {meetings.length === 0 ? (
-              <div className="border border-dashed border-neutral-800 rounded-xl p-8 text-center flex flex-col items-center gap-2 bg-neutral-950/20">
-                <Calendar className="h-8 w-8 text-neutral-700" />
-                <p className="text-xs font-semibold text-neutral-400">No upcoming meetings</p>
-                <p className="text-[10px] text-neutral-600">No events found in Google Calendar for {selectedExec?.name}.</p>
+              <div className="border border-dashed border-neutral-800/80 rounded-2xl p-10 text-center flex flex-col items-center gap-4 bg-neutral-950/10 animate-scaleUp relative overflow-hidden">
+                {/* Visual Glow Spotlight */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full bg-violet-500/5 blur-[50px] pointer-events-none" />
+                
+                {/* Beautiful Inline SVG Illustration */}
+                <div className="relative animate-float">
+                  <svg className="h-16 w-16 text-violet-500/30" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="16" y="18" width="32" height="32" rx="4" stroke="currentColor" strokeWidth="2" />
+                    <line x1="16" y1="28" x2="48" y2="28" stroke="currentColor" strokeWidth="2" />
+                    <line x1="26" y1="14" x2="26" y2="20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="38" y1="14" x2="38" y2="20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="32" cy="39" r="6" stroke="currentColor" strokeWidth="2" />
+                    <line x1="32" y1="35" x2="32" y2="39" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="32" y1="39" x2="36" y2="39" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </div>
+
+                <div className="relative z-10 flex flex-col gap-1.5 max-w-sm mx-auto">
+                  <p className="text-sm font-bold text-neutral-200">No Meetings Slotted</p>
+                  <p className="text-xs text-neutral-500 leading-relaxed">
+                    No upcoming integrations sessions or Google Meet schedules found for {selectedExec?.name}.
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1858,7 +2040,7 @@ export default function Dashboard() {
                   return (
                     <div
                       key={meet.id}
-                      className="border border-neutral-800 bg-neutral-950/60 rounded-xl p-5 flex flex-col justify-between gap-3 transition hover:border-neutral-750 duration-300"
+                      className="border border-neutral-800 bg-neutral-950/60 rounded-2xl p-5 flex flex-col justify-between gap-3 transition-all duration-300 hover:border-neutral-700/80 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-0.5"
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-center justify-between gap-2">
@@ -1921,7 +2103,7 @@ export default function Dashboard() {
       {/* Interactive Prompt Modal for Missing Calendar Event Details */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4 animate-scaleUp">
 
             {/* Header */}
             <div>
@@ -2018,7 +2200,7 @@ export default function Dashboard() {
       {/* Create Workspace Modal */}
       {isCreateWorkspaceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4 animate-scaleUp">
             
             {/* Header */}
             <div>
@@ -2121,7 +2303,7 @@ export default function Dashboard() {
       {/* Manage Workspace Members Modal */}
       {isWorkspaceMembersModalOpen && selectedExec && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative flex flex-col gap-4 mx-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative flex flex-col gap-4 mx-4 animate-scaleUp">
             
             {/* Header */}
             <div>
@@ -2258,7 +2440,7 @@ export default function Dashboard() {
       {/* Admin Panel: User Modal */}
       {isAdminUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4 animate-scaleUp">
             <div>
               <div className="flex items-center gap-2 text-blue-400 font-bold text-lg mb-1">
                 <Sparkles className="h-5 w-5" />
@@ -2352,7 +2534,7 @@ export default function Dashboard() {
       {/* Admin Panel: Workspace Modal */}
       {isAdminWorkspaceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4 animate-scaleUp">
             <div>
               <div className="flex items-center gap-2 text-blue-400 font-bold text-lg mb-1">
                 <Sparkles className="h-5 w-5" />
@@ -2456,7 +2638,7 @@ export default function Dashboard() {
       {/* Admin Panel: Mapping Modal */}
       {isMappingModalOpen && mappingWorkspace && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4 mx-4 animate-scaleUp">
             <div>
               <div className="flex items-center gap-2 text-blue-400 font-bold text-lg mb-1">
                 <Users className="h-5 w-5" />
