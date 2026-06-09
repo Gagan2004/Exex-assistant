@@ -1,8 +1,10 @@
 import os
+import hashlib
+import secrets
 from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
-from sqlalchemy import create_engine, Column, String, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, String, DateTime, ForeignKey, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
@@ -14,6 +16,30 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} i
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return f"{salt}:{key.hex()}"
+
+def verify_password(password: str, hashed: str) -> bool:
+    try:
+        salt, key_hex = hashed.split(":", 1)
+        key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+        return key.hex() == key_hex
+    except Exception:
+        return False
+
+class UserDB(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # "executive" or "ea"
+
+    workspaces = relationship("UserWorkspaceDB", back_populates="user", cascade="all, delete-orphan")
+
 class ExecutiveDB(Base):
     __tablename__ = "executives"
 
@@ -22,9 +48,22 @@ class ExecutiveDB(Base):
     role = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
     email = Column(String, nullable=False, unique=True)
+    owner_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
 
     actions = relationship("ActionItemDB", back_populates="executive", cascade="all, delete-orphan")
     tokens = relationship("OAuthTokenDB", back_populates="executive", cascade="all, delete-orphan")
+    users = relationship("UserWorkspaceDB", back_populates="executive", cascade="all, delete-orphan")
+    owner = relationship("UserDB", backref="owned_workspaces")
+
+class UserWorkspaceDB(Base):
+    __tablename__ = "user_workspaces"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    executive_id = Column(String, ForeignKey("executives.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("UserDB", back_populates="workspaces")
+    executive = relationship("ExecutiveDB", back_populates="users")
 
 class ActionItemDB(Base):
     __tablename__ = "action_items"
@@ -62,6 +101,17 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    # Self-healing migration for SQLite/PostgreSQL to add owner_id column if it does not exist
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    columns = [c["name"] for c in inspector.get_columns("executives")]
+    if "owner_id" not in columns:
+        print("[*] Migrating database: adding 'owner_id' column to 'executives' table...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE executives ADD COLUMN owner_id VARCHAR"))
+            print("[+] Migration successful.")
+
     db = SessionLocal()
     try:
         # Seed executives if table is empty
@@ -90,6 +140,55 @@ def init_db():
                 ),
             ]
             db.add_all(seed_executives)
+            db.commit()
+
+        # Seed users if table is empty
+        if db.query(UserDB).count() == 0:
+            seed_users = [
+                UserDB(
+                    id="user_1",
+                    email="ea@company.com",
+                    hashed_password=hash_password("password123"),
+                    name="Executive Assistant",
+                    role="ea"
+                ),
+                UserDB(
+                    id="user_2",
+                    email="sarah@company.com",
+                    hashed_password=hash_password("password123"),
+                    name="Sarah Jenkins",
+                    role="executive"
+                ),
+                UserDB(
+                    id="user_3",
+                    email="david@company.com",
+                    hashed_password=hash_password("password123"),
+                    name="David Kross",
+                    role="executive"
+                ),
+                UserDB(
+                    id="user_4",
+                    email="elena@company.com",
+                    hashed_password=hash_password("password123"),
+                    name="Elena Rostova",
+                    role="executive"
+                ),
+            ]
+            db.add_all(seed_users)
+            db.commit()
+
+            # Seed user workspace mappings
+            seed_mappings = [
+                # EA maps to all three executives
+                UserWorkspaceDB(id="map_ea_1", user_id="user_1", executive_id="exec_1"),
+                UserWorkspaceDB(id="map_ea_2", user_id="user_1", executive_id="exec_2"),
+                UserWorkspaceDB(id="map_ea_3", user_id="user_1", executive_id="exec_3"),
+                # Executives map ONLY to their own workspaces
+                UserWorkspaceDB(id="map_sarah", user_id="user_2", executive_id="exec_1"),
+                UserWorkspaceDB(id="map_david", user_id="user_3", executive_id="exec_2"),
+                UserWorkspaceDB(id="map_elena", user_id="user_4", executive_id="exec_3"),
+            ]
+            db.add_all(seed_mappings)
             db.commit()
 
         # Seed action items if table is empty

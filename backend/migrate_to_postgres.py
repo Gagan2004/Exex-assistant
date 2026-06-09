@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 # Add current dir to path to import local modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from database import Base, ExecutiveDB, ActionItemDB, OAuthTokenDB
+from database import Base, ExecutiveDB, ActionItemDB, OAuthTokenDB, UserDB, UserWorkspaceDB
 
 def migrate():
     # 1. Connect to SQLite (source)
@@ -71,11 +71,46 @@ def migrate():
                     name=ex.name,
                     role=ex.role,
                     avatar=ex.avatar,
-                    email=ex.email
+                    email=ex.email,
+                    owner_id=ex.owner_id
                 )
                 postgres_session.add(new_ex)
         postgres_session.commit()
         print("[+] Executives migration complete.")
+
+        # Migrate Users
+        print("\n[*] Migrating 'users' table...")
+        users = sqlite_session.query(UserDB).all()
+        print(f"    Found {len(users)} user record(s) in SQLite.")
+        for usr in users:
+            exists = postgres_session.query(UserDB).filter_by(id=usr.id).first()
+            if not exists:
+                new_usr = UserDB(
+                    id=usr.id,
+                    email=usr.email,
+                    hashed_password=usr.hashed_password,
+                    name=usr.name,
+                    role=usr.role
+                )
+                postgres_session.add(new_usr)
+        postgres_session.commit()
+        print("[+] Users migration complete.")
+
+        # Migrate User Workspaces
+        print("\n[*] Migrating 'user_workspaces' table...")
+        mappings = sqlite_session.query(UserWorkspaceDB).all()
+        print(f"    Found {len(mappings)} user workspace mapping record(s) in SQLite.")
+        for mp in mappings:
+            exists = postgres_session.query(UserWorkspaceDB).filter_by(id=mp.id).first()
+            if not exists:
+                new_mp = UserWorkspaceDB(
+                    id=mp.id,
+                    user_id=mp.user_id,
+                    executive_id=mp.executive_id
+                )
+                postgres_session.add(new_mp)
+        postgres_session.commit()
+        print("[+] User Workspaces migration complete.")
 
         # Migrate OAuth Tokens
         print("\n[*] Migrating 'oauth_tokens' table...")
