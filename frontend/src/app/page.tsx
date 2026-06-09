@@ -1163,6 +1163,8 @@ export default function Dashboard() {
                 onClick={() => {
                   setLoginEmail("ea@company.com");
                   setLoginPassword("password123");
+                  setIsSignUp(false);
+                  setLoginError("");
                 }}
                 className="bg-neutral-950/60 border border-neutral-850 hover:bg-neutral-800/40 text-neutral-300 hover:text-white p-2.5 rounded-xl transition text-left cursor-pointer font-medium"
               >
@@ -1174,6 +1176,8 @@ export default function Dashboard() {
                 onClick={() => {
                   setLoginEmail("sarah@company.com");
                   setLoginPassword("password123");
+                  setIsSignUp(false);
+                  setLoginError("");
                 }}
                 className="bg-neutral-950/60 border border-neutral-850 hover:bg-neutral-800/40 text-neutral-300 hover:text-white p-2.5 rounded-xl transition text-left cursor-pointer font-medium"
               >
@@ -1185,6 +1189,8 @@ export default function Dashboard() {
                 onClick={() => {
                   setLoginEmail("david@company.com");
                   setLoginPassword("password123");
+                  setIsSignUp(false);
+                  setLoginError("");
                 }}
                 className="bg-neutral-950/60 border border-neutral-850 hover:bg-neutral-800/40 text-neutral-300 hover:text-white p-2.5 rounded-xl transition text-left cursor-pointer font-medium"
               >
@@ -1196,6 +1202,8 @@ export default function Dashboard() {
                 onClick={() => {
                   setLoginEmail("elena@company.com");
                   setLoginPassword("password123");
+                  setIsSignUp(false);
+                  setLoginError("");
                 }}
                 className="bg-neutral-950/60 border border-neutral-850 hover:bg-neutral-800/40 text-neutral-300 hover:text-white p-2.5 rounded-xl transition text-left cursor-pointer font-medium"
               >
@@ -1207,6 +1215,8 @@ export default function Dashboard() {
                 onClick={() => {
                   setLoginEmail("admin@company.com");
                   setLoginPassword("admin123");
+                  setIsSignUp(false);
+                  setLoginError("");
                 }}
                 className="bg-neutral-950/60 border border-neutral-850 hover:bg-neutral-800/40 text-neutral-300 hover:text-white p-2.5 rounded-xl transition text-left cursor-pointer font-medium col-span-2"
               >
