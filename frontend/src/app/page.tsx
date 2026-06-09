@@ -91,7 +91,6 @@ export default function Dashboard() {
   const [createWorkspaceLoading, setCreateWorkspaceLoading] = useState(false);
 
   // Admin Panel State
-  const [isAdminView, setIsAdminView] = useState(false);
   const [adminTab, setAdminTab] = useState<"users" | "workspaces" | "logs">("users");
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [adminWorkspaces, setAdminWorkspaces] = useState<any[]>([]);
@@ -243,7 +242,7 @@ export default function Dashboard() {
 
   // Fetch admin panel data
   useEffect(() => {
-    if (token && isAdminView) {
+    if (token && currentUser?.role === "admin") {
       if (adminTab === "users") {
         fetchAdminUsers();
       } else if (adminTab === "workspaces") {
@@ -253,7 +252,7 @@ export default function Dashboard() {
         fetchActivityLogs();
       }
     }
-  }, [isAdminView, adminTab, token]);
+  }, [currentUser, adminTab, token]);
 
   const fetchAdminUsers = async () => {
     try {
@@ -1226,20 +1225,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Admin Switcher Toggle */}
-          {currentUser && currentUser.role === "admin" && (
-            <button
-              onClick={() => setIsAdminView(!isAdminView)}
-              className={`flex items-center gap-2 border px-4.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                isAdminView
-                  ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white border-transparent shadow-lg shadow-blue-500/15"
-                  : "bg-neutral-900 border-neutral-800 hover:bg-neutral-800/80 text-neutral-400 hover:text-white"
-              }`}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>{isAdminView ? "Standard Dashboard" : "Admin Panel"}</span>
-            </button>
-          )}
+
 
           {/* Connection status indicators */}
           <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-full text-xs text-neutral-400">
@@ -1260,7 +1246,7 @@ export default function Dashboard() {
       </header>
 
       {/* Workspace Wrapper */}
-      {isAdminView ? (
+      {currentUser?.role === "admin" ? (
         <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fadeIn">
           {/* Admin Sidebar */}
           <aside className="lg:col-span-1 flex flex-col gap-4">
