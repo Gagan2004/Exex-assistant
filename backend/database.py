@@ -61,6 +61,7 @@ class UserWorkspaceDB(Base):
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     executive_id = Column(String, ForeignKey("executives.id", ondelete="CASCADE"), nullable=False)
+    permission = Column(String, default="write", nullable=False)  # "read" or "write"
 
     user = relationship("UserDB", back_populates="workspaces")
     executive = relationship("ExecutiveDB", back_populates="users")
@@ -92,6 +93,30 @@ class OAuthTokenDB(Base):
 
     executive = relationship("ExecutiveDB", back_populates="tokens")
 
+class ActivityLogDB(Base):
+    __tablename__ = "activity_logs"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action_type = Column(String, nullable=False)  # e.g., "user_login", "workspace_create", "action_approve"
+    description = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("UserDB")
+
+class InvitationDB(Base):
+    __tablename__ = "workspace_invitations"
+
+    id = Column(String, primary_key=True, index=True)
+    email = Column(String, index=True, nullable=False)
+    executive_id = Column(String, ForeignKey("executives.id", ondelete="CASCADE"), nullable=False)
+    permission = Column(String, default="read", nullable=False)  # "read" or "write"
+    invited_by = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    executive = relationship("ExecutiveDB")
+    inviter = relationship("UserDB")
+
 def get_db():
     db = SessionLocal()
     try:
@@ -112,6 +137,14 @@ def init_db():
             conn.execute(text("ALTER TABLE executives ADD COLUMN owner_id VARCHAR"))
             print("[+] Migration successful.")
 
+    # Self-healing migration for user_workspaces to add permission column if it does not exist
+    user_workspaces_cols = [c["name"] for c in inspector.get_columns("user_workspaces")]
+    if "permission" not in user_workspaces_cols:
+        print("[*] Migrating database: adding 'permission' column to 'user_workspaces' table...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user_workspaces ADD COLUMN permission VARCHAR DEFAULT 'write'"))
+            print("[+] Migration successful.")
+
     db = SessionLocal()
     try:
         # Seed executives if table is empty
@@ -122,21 +155,24 @@ def init_db():
                     name="Sarah Jenkins", 
                     role="CEO", 
                     avatar="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150", 
-                    email="sarah.j@company.com"
+                    email="sarah.j@company.com",
+                    owner_id="user_2"
                 ),
                 ExecutiveDB(
                     id="exec_2", 
                     name="David Kross", 
                     role="CFO", 
                     avatar="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150", 
-                    email="david.k@company.com"
+                    email="david.k@company.com",
+                    owner_id="user_3"
                 ),
                 ExecutiveDB(
                     id="exec_3", 
                     name="Elena Rostova", 
                     role="CTO", 
                     avatar="https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150", 
-                    email="elena.r@company.com"
+                    email="elena.r@company.com",
+                    owner_id="user_4"
                 ),
             ]
             db.add_all(seed_executives)
@@ -173,11 +209,34 @@ def init_db():
                     name="Elena Rostova",
                     role="executive"
                 ),
+                UserDB(
+                    id="user_admin",
+                    email="admin@company.com",
+                    hashed_password=hash_password("admin123"),
+                    name="System Administrator",
+                    role="admin"
+                ),
             ]
             db.add_all(seed_users)
             db.commit()
 
-            # Seed user workspace mappings
+        # Ensure admin user is seeded even if table is not empty
+        admin_user = db.query(UserDB).filter_by(email="admin@company.com").first()
+        if not admin_user:
+            print("[*] Seeding default administrator account...")
+            admin_user = UserDB(
+                id="user_admin",
+                email="admin@company.com",
+                hashed_password=hash_password("admin123"),
+                name="System Administrator",
+                role="admin"
+            )
+            db.add(admin_user)
+            db.commit()
+
+        # Seed user workspace mappings if table is empty
+        if db.query(UserWorkspaceDB).count() == 0:
+            print("[*] Seeding default user workspace mappings...")
             seed_mappings = [
                 # EA maps to all three executives
                 UserWorkspaceDB(id="map_ea_1", user_id="user_1", executive_id="exec_1"),
@@ -224,5 +283,20 @@ def init_db():
             ]
             db.add_all(seed_actions)
             db.commit()
+
+        # Update seeded executives with their owner_ids if not already set
+        exec1 = db.query(ExecutiveDB).filter_by(id="exec_1").first()
+        if exec1 and not exec1.owner_id:
+            print("[*] Self-healing DB: Setting owner_id for exec_1...")
+            exec1.owner_id = "user_2"
+        exec2 = db.query(ExecutiveDB).filter_by(id="exec_2").first()
+        if exec2 and not exec2.owner_id:
+            print("[*] Self-healing DB: Setting owner_id for exec_2...")
+            exec2.owner_id = "user_3"
+        exec3 = db.query(ExecutiveDB).filter_by(id="exec_3").first()
+        if exec3 and not exec3.owner_id:
+            print("[*] Self-healing DB: Setting owner_id for exec_3...")
+            exec3.owner_id = "user_4"
+        db.commit()
     finally:
         db.close()

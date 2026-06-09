@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 # Add current dir to path to import local modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from database import Base, ExecutiveDB, ActionItemDB, OAuthTokenDB, UserDB, UserWorkspaceDB
+from database import Base, ExecutiveDB, ActionItemDB, OAuthTokenDB, UserDB, UserWorkspaceDB, ActivityLogDB, InvitationDB
 
 def migrate():
     # 1. Connect to SQLite (source)
@@ -106,7 +106,8 @@ def migrate():
                 new_mp = UserWorkspaceDB(
                     id=mp.id,
                     user_id=mp.user_id,
-                    executive_id=mp.executive_id
+                    executive_id=mp.executive_id,
+                    permission=mp.permission
                 )
                 postgres_session.add(new_mp)
         postgres_session.commit()
@@ -152,6 +153,43 @@ def migrate():
                 postgres_session.add(new_ac)
         postgres_session.commit()
         print("[+] Action Items migration complete.")
+
+        # Migrate Activity Logs
+        print("\n[*] Migrating 'activity_logs' table...")
+        logs = sqlite_session.query(ActivityLogDB).all()
+        print(f"    Found {len(logs)} activity log record(s) in SQLite.")
+        for lg in logs:
+            exists = postgres_session.query(ActivityLogDB).filter_by(id=lg.id).first()
+            if not exists:
+                new_lg = ActivityLogDB(
+                    id=lg.id,
+                    user_id=lg.user_id,
+                    action_type=lg.action_type,
+                    description=lg.description,
+                    created_at=lg.created_at
+                )
+                postgres_session.add(new_lg)
+        postgres_session.commit()
+        print("[+] Activity Logs migration complete.")
+
+        # Migrate Workspace Invitations
+        print("\n[*] Migrating 'workspace_invitations' table...")
+        invitations = sqlite_session.query(InvitationDB).all()
+        print(f"    Found {len(invitations)} pending invitation(s) in SQLite.")
+        for inv in invitations:
+            exists = postgres_session.query(InvitationDB).filter_by(id=inv.id).first()
+            if not exists:
+                new_inv = InvitationDB(
+                    id=inv.id,
+                    email=inv.email,
+                    executive_id=inv.executive_id,
+                    permission=inv.permission,
+                    invited_by=inv.invited_by,
+                    created_at=inv.created_at
+                )
+                postgres_session.add(new_inv)
+        postgres_session.commit()
+        print("[+] Workspace Invitations migration complete.")
 
         print("\n[SUCCESS] Database migration completed successfully!")
 
